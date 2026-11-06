@@ -1,15 +1,11 @@
-# Arabic Hotel Sentiment - Corrected Preprocessing Repair (round 2, 2026-11-05)
+# Arabic Hotel Review Sentiment
 
-Supersedes the 2026-11-05 20:52 repair (model_v3_repaired.joblib, acc 88.85), which is
-PROVISIONAL: its strip regex carried two descriptors in raw hamza-on-yaa orthography
-(استثنائي, رائع) while stripping AFTER normalization (which folds ئ->ي), so 9,845 rows
-(7,294 استثنائي + 2,551 رائع) kept their label-leaking header. That artifact is preserved
-for audit only and must not be used.
+Word/character TF-IDF and logistic regression on the HARD dataset, with corrected
+preprocessing that removes rating-header label leakage before normalization.
+Cleaned evaluation: **88.06% accuracy, F1 0.8843, AUC 0.9458** on a reused
+development benchmark, not independent confirmation. FastAPI demo included.
 
-## What this package is
-A correctness repair of the v3 preprocessing, not an accuracy experiment. Same source
-data, same split, same v3 hyperparameters; no tuning, no CV, no new architecture, no new
-data. Trained ONCE under a 10-minute compute cap (fit+vectorize: 20.9s).
+Earlier 94.62% accuracy was inflated by label leakage and is withdrawn.
 
 ## Pipeline (canonical module: header_re.py, 44 tests in test_header_re.py)
 1. Load raw (sha256 86c1ae1b...ab02, identical to audit-r2 input; 105,698 rows).
