@@ -1,83 +1,76 @@
-# Arabic Hotel Review Sentiment (HARD dataset)
+# Arabic Hotel Sentiment - Corrected Preprocessing Repair (round 2, 2026-11-05)
 
-Binary sentiment classification (positive / negative) of Arabic hotel reviews,
-using the HARD balanced dataset (Elnagar, Khalifa & Einea, 2018).
+Supersedes the 2026-11-05 20:52 repair (model_v3_repaired.joblib, acc 88.85), which is
+PROVISIONAL: its strip regex carried two descriptors in raw hamza-on-yaa orthography
+(استثنائي, رائع) while stripping AFTER normalization (which folds ئ->ي), so 9,845 rows
+(7,294 استثنائي + 2,551 رائع) kept their label-leaking header. That artifact is preserved
+for audit only and must not be used.
 
-## Source and license
-- Data: https://github.com/elnagara/HARD-Arabic-Dataset (`data/balanced-reviews.zip`),
-  collected from Booking.com in June/July 2016. Modern Standard + dialectal Arabic.
-- The repository ships **no explicit LICENSE file**; the authors distribute it for
-  research use with a citation request. This project is educational portfolio work
-  and cites: Elnagar A., Khalifa Y.S., Einea A. (2018), Hotel Arabic-Reviews Dataset
-  Construction for Sentiment Analysis Applications, Springer SCI vol 740, pp 35-52,
-  doi:10.1007/978-3-319-67056-0_3.
-- **Rights state (verified 2026-11-04):** the GitHub repo ships no LICENSE file
-  (GitHub license API: 404) and the Hugging Face card says `license: unknown`.
-  No redistribution permission exists, so the original dataset archive and raw
-  reviews are NOT included in this project. Get the data from the canonical
-  source with `src/download_data.sh` (checks SHA-256
-  `1939c1ca59ff50bd3887223b153c7fb5c9fd232b405320244c55791bc8b5d448`).
-  The trained model artifact is a small derived work included so the app runs;
-  no rights over the dataset or derived artifacts are claimed or granted.
+## What this package is
+A correctness repair of the v3 preprocessing, not an accuracy experiment. Same source
+data, same split, same v3 hyperparameters; no tuning, no CV, no new architecture, no new
+data. Trained ONCE under a 10-minute compute cap (fit+vectorize: 20.9s).
 
-## Evaluation protocol (frozen 2026-11-04 before any model fitting)
-1. Labels: rating 1-2 -> negative (0), rating 4-5 -> positive (1). Ratings of 3 do
-   not occur in this balanced subset.
-2. Light normalization only: remove Arabic diacritics and tatweel, unify alef
-   variants and yaa forms. No stemming, no external lexicons.
-3. Split: **group split by hotel** (GroupShuffleSplit, test 20%, seed 42) - no hotel
-   appears in both train and test, so the evaluation measures generalization to
-   hotels the model never saw, not memorized property-specific wording.
-4. The TF-IDF vectorizer is fit on the training reviews only.
-5. Models compared on the untouched test set exactly once: majority-class dummy,
-   MultinomialNB, and logistic regression. No post-hoc tuning after viewing test
-   results. All metrics reported as-is, including any baseline we fail to beat.
-6. Limitations stated plainly: reviews are from 2016 Booking.com hotels; the label
-   is derived from star ratings; single frozen split, no cross-validation claim.
+## Pipeline (canonical module: header_re.py, 44 tests in test_header_re.py)
+1. Load raw (sha256 86c1ae1b...ab02, identical to audit-r2 input; 105,698 rows).
+2. ORIGINAL seed-42 hotel-group split (GroupShuffleSplit, test_size 0.2): 82,827 / 22,871.
+   Asserted identical hotel assignment to the previous repair; zero hotel overlap.
+3. Mask parity assertion vs audit r2 on ALL raw rows: 43,685 headers, per-descriptor
+   counts identical (byte-identical regex pattern).
+4. STRIP header on RAW text FIRST (repeated: 176 rows carried a double header).
+   Train 34,316 + test 9,369 stripped rows = 43,685 exactly.
+5. Normalize (v3/audit-identical folding), then strip the 2 headers written in
+   normalized orthography ("رايع."). Header-only reviews dropped (77 train / 13 test).
+6. ASSERT ZERO headers remain under BOTH raw and normalized patterns (train and test).
+7. Conflicting-label texts within train: ALL copies dropped (117 texts / 1,021 rows,
+   conservative). Then dedup within train (924 rows; disjoint from conflict set by
+   construction: dedup ran on the post-conflict frame).
+8. Remove ALL train-test normalized-text overlap from BOTH sides: 240 texts
+   (240 train rows, 370 test rows; test side 336 same-label, 34 conflicting-label).
+   Assert zero cross-split overlap.
+Final: train 80,565 / test 22,488.
 
-## Model selection and amendment audit trail
-- Logistic regression was PRESELECTED as the primary model before viewing test
-  results; the majority dummy and MultinomialNB are baselines reported for
-  context. No model was selected or tuned after viewing test metrics.
-- Amendment (2026-11-04, after the first evaluation): a normalized-duplicate
-  check found 475 of 22,871 test reviews (2.08%) duplicated a training review
-  verbatim after normalization. These were removed from the TEST set only
-  (training set untouched, no refit needed) and metrics re-evaluated once on the
-  deduplicated 22,396-row test set. Both facts are recorded here and in
-  metrics.json (`test_duplicates_removed`). First-evaluation figures (before
-  dedup) were accuracy 0.9391 / AUC 0.9788; deduplicated: 0.9379 / 0.9782.
-- Improvement round (2026-11-04, v3): five candidate configurations were
-  compared with 3-fold GroupKFold BY HOTEL over the TRAINING SPLIT ONLY
-  (improve/improve.py; the test set played no role in selection). Winner:
-  word(1,2)+char_wb(3,5) TF-IDF union, sublinear tf, LR C=2.0 (CV accuracy
-  0.9460 vs 0.9362 for the v2 configuration; +/- 0.0016 is the fold-to-fold
-  standard deviation across the 3 folds, ddof=0 - a spread of fold scores,
-  not a confidence interval). Refit on the full training
-  split and evaluated ONCE on the same deduplicated test set - this is the
-  SECOND evaluation of that test set overall, i.e. benchmark reuse, not a
-  fresh unseen evaluation. Result: accuracy 0.9462 / F1 0.9480 / AUC 0.9830
-  (vs 0.9379 / 0.9400 / 0.9782 in v2). Label semantics, hotel-disjoint split
-  and dedup rule are unchanged.
+## Frozen config (freeze2.json, hashes asserted again before fit)
+word TF-IDF (1,2) min_df 3 max 150k sublinear; char_wb (3,5) min_df 3 max 100k sublinear;
+LogisticRegression C=2.0 max_iter 1000 seed 42. Raw/code/text/label sha256 in freeze2.json.
 
-## Reproduce
+## Result (single eval on the exposed-test remainder - benchmark reuse, NOT fresh validation)
+accuracy 0.8806, F1 0.8843, AUC 0.9458 (n_test 22,488).
+The test remainder is development-exposed: these numbers are a development check on a
+reused benchmark, not independent confirmation. The corrected clean number is lower than
+the provisional 88.85 because the remaining 9,845 leaked headers are actually removed now.
+
+## Inference
+from header_re import preprocess  # raw header(s) -> normalize -> normalized header(s)
+# The included FastAPI app applies this preprocessing before prediction.
+Bundle: model_v3_repaired2.joblib {vec, vec_c, lr, config, preprocessing, raw_header_re, freeze}.
+
+## Rights note
+Raw review data rights remain unresolved; package contains code, config, metrics and the
+model only - no raw reviews. No dataset rights or redistribution permission are granted by this repository.
+
+
+## Run the public package
 
 ```bash
 pip install -r requirements.txt
-sh src/download_data.sh   # downloads from the canonical source, verifies SHA-256, unpacks
-python3 src/prepare.py     # normalize, label, group-split by hotel -> data/train.pkl, data/test.pkl
-python3 src/train.py       # fit on train only, evaluate once on test -> data/metrics.json, data/model.joblib
-python3 src/figures.py     # figures/evaluation.png
-python3 -m pytest tests/   # 5 tests (needs the regenerated data/*.pkl from prepare.py)
-uvicorn src.app:app        # Arabic UI + /predict API (runs directly on the shipped model.joblib)
+python test_header_re.py  # 44 preprocessing assertions, no raw data required
+uvicorn src.app:app --port 8000
 ```
 
-The package ships code, tests, metrics, figures and the trained model only - no
-dataset files (see Source and license). download_data.sh fetches the dataset
-from the canonical source with a SHA-256 check; prepare.py deterministically
-rebuilds the exact train/test split (seed 42, hotel-grouped).
+The included model is the corrected round-2 artifact, not the withdrawn v3 model.
+Earlier 94.62% accuracy was inflated by rating-header label leakage and is withdrawn.
+The app uses uncalibrated logistic-regression scores, not guaranteed probabilities.
 
-## Layout
-- `src/prepare.py` - load, normalize, label, group-split; writes data/train.pkl, data/test.pkl
-- `src/train.py` - fit vectorizer + models, evaluate once, write metrics.json + model.joblib
-- `src/app.py` - FastAPI serving the saved pipeline (Arabic input)
-- `tests/` - pytest suite (split integrity, label mapping, train-only fitting, prediction sanity, API)
+For reproduction, obtain the HARD balanced reviews from
+https://github.com/elnagara/HARD-Arabic-Dataset (data/balanced-reviews.zip),
+unpack balanced-reviews.txt into data/, then run `python repair2.py prepare`.
+This checks the raw-file SHA-256 and recreates the cleaned split. `python repair2.py train`
+refits the frozen configuration; no refit is needed for inference or the preprocessing tests.
+The historical comparison with an earlier private split artifact is omitted from
+this public script; the fixed-seed split and zero-overlap assertions remain.
+
+## Attribution
+
+Portfolio project of Ahmed Khalifa, packaged and corrected with AI-assistant help.
+Dataset: Elnagar et al. (2018), HARD. Raw reviews are not redistributed.

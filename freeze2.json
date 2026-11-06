@@ -1,0 +1,79 @@
+{
+ "frozen_at": "2026-11-05T21:02 EET",
+ "stage": "prepare-complete-pre-training",
+ "supersedes": "20:52 repair (normalized-before-strip, hamza-on-yaa regex blind spot; provisional 88.85)",
+ "pipeline_order": "load raw -> label -> ORIGINAL seed-42 hotel-group split on raw frame -> STRIP header on RAW first (canonical header_re, audit-r2 pattern, repeated for double headers) -> normalize -> strip normalized-orthography headers -> drop empties -> ASSERT zero headers (raw and normalized patterns) -> drop conflicting-label texts entirely (train) -> dedup within train -> remove all train-test overlap BOTH sides -> freeze -> train once (v3 config) -> single benchmark-reuse eval",
+ "counts": {
+  "raw_sha256": "86c1ae1b41267262d806275df4c0385b7948b18a685c93212ca858aa8df2ab02",
+  "rows_loaded": 105698,
+  "mask_total": 43685,
+  "mask_per_descriptor_matches_audit_r2": true,
+  "split_train": 82827,
+  "split_test": 22871,
+  "split_assignment_matches_previous_repair": true,
+  "train_stripped_descriptor_rows": 34316,
+  "test_stripped_descriptor_rows": 9369,
+  "rows_with_second_header_also_stripped": 176,
+  "assert_zero_raw_headers_after_strip": true,
+  "train_empty_after_strip_dropped": 77,
+  "test_empty_after_strip_dropped": 13,
+  "train_normalized_orthography_headers_stripped": 2,
+  "test_normalized_orthography_headers_stripped": 0,
+  "assert_zero_headers_after_strip_and_normalize": true,
+  "train_conflict_texts": 117,
+  "train_conflict_rows_dropped": 1021,
+  "train_duplicate_rows_dropped": 924,
+  "conflict_disjoint_from_dedup": "dedup ran on post-conflict frame; intersection empty by construction",
+  "overlap_texts": 240,
+  "overlap_rows_dropped_train": 240,
+  "overlap_rows_dropped_test": 370,
+  "overlap_test_rows_same_label": 336,
+  "overlap_test_rows_conflicting_label": 34,
+  "assert_zero_cross_split_overlap": true,
+  "final_train": 80565,
+  "final_test": 22488,
+  "prepare_wall_sec": 2.3
+ },
+ "hashes": {
+  "raw_sha256": "86c1ae1b41267262d806275df4c0385b7948b18a685c93212ca858aa8df2ab02",
+  "header_re_sha256": "e4a9122aa270a0b630f849a9a1a5c98ae25191071c39a1fbd45cba848fbe97c2",
+  "repair2_sha256": "f2fa749032f0cdd6dbd637c2e6e8ea46303d4e7dd8b4384d4c83e4cca17e3a3d",
+  "train_texts_sha256": "5c09d4175731789ed132d2ea73945a1d82420c52aaef42afc315b7683a3bd1e3",
+  "train_labels_sha256": "474be93ac165b5bfc81263a4d6bed71761ed6c3635d8bcd079fcbd06a8f532ff",
+  "test_texts_sha256": "a4b94f4978b9e8bb59f07395f253fe046220f333c46311354eee6bab596c9bd6",
+  "test_labels_sha256": "b1a7fad41cbb02b4672203451f6198b45ace1bd2e3b023052fe7458d0740970a"
+ },
+ "config": {
+  "vec_word": {
+   "ngram_range": [
+    1,
+    2
+   ],
+   "min_df": 3,
+   "max_features": 150000,
+   "sublinear_tf": true
+  },
+  "vec_char": {
+   "analyzer": "char_wb",
+   "ngram_range": [
+    3,
+    5
+   ],
+   "min_df": 3,
+   "max_features": 100000,
+   "sublinear_tf": true
+  },
+  "lr": {
+   "C": 2.0,
+   "max_iter": 1000,
+   "random_state": 42
+  },
+  "split": {
+   "method": "GroupShuffleSplit",
+   "groups": "Hotel name",
+   "test_size": 0.2,
+   "random_state": 42
+  },
+  "source": "HARD balanced-reviews.txt (local, unchanged)"
+ }
+}
